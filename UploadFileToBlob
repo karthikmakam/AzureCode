@@ -1,0 +1,85 @@
+In order to upload files to Blob storage.
+Create a Azure account in Azure portal, once created copy the primary connection string and store it in either app.config/system evnironment variables
+Add the Nuget packages Microsoft.Azure.Storage.blob
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Azure.Storage;
+using Microsoft.Azure.Storage.Blob;
+
+namespace Test
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.WriteLine("Blob Storage Sample using C# Asynchronous calls");
+            Console.WriteLine();
+            ProcessTask().GetAwaiter().GetResult();
+
+        }
+
+        public static async Task ProcessTask()
+        {
+            CloudStorageAccount storageAccount = null;
+            CloudBlobContainer blobContainer = null;
+            string sourceFile = null;
+            string destinationFile = null;
+
+            string storageConnectionString = Environment.GetEnvironmentVariable("storageconnectionstring");
+
+            if (CloudStorageAccount.TryParse(storageConnectionString, out storageAccount))
+            {
+                try
+                {
+                    CloudBlobClient cloudBlobClient = storageAccount.CreateCloudBlobClient();
+                    blobContainer = cloudBlobClient.GetContainerReference("quickstartblobs" + Guid.NewGuid().ToString());
+                    await blobContainer.CreateAsync();
+
+                    Console.WriteLine("Created Container '{0}'", blobContainer.Name);
+                    Console.WriteLine();
+
+                    BlobContainerPermissions permissions = new BlobContainerPermissions
+                    {
+                        PublicAccess = BlobContainerPublicAccessType.Blob
+                    };
+
+                    await blobContainer.SetPermissionsAsync(permissions);
+
+                    string localPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                    string localFileName = "BlobUploadDoc.txt";
+
+                    sourceFile = Path.Combine(localPath, localFileName);
+
+                    CloudBlockBlob cloudBlockBlob = blobContainer.GetBlockBlobReference(localFileName);
+                    await cloudBlockBlob.UploadFromFileAsync(sourceFile);
+
+                    Console.WriteLine("File Uploaded to Blob");
+                    Console.ReadLine();
+
+                    //Listing the blobs in container
+                    BlobContinuationToken blobContinuationToken = null;
+                    do
+                    {
+                        var resultSegment = await blobContainer.ListBlobsSegmentedAsync(null, blobContinuationToken);
+                        blobContinuationToken = resultSegment.ContinuationToken;
+                        foreach(IListBlobItem item in resultSegment.Results)
+                        {
+                            Console.WriteLine(item.Uri);
+                        }
+                    } while (blobContinuationToken != null);
+                    Console.ReadLine();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error returned from the service: {0}", ex.Message);
+                }
+            }
+        }
+
+    }
+}
